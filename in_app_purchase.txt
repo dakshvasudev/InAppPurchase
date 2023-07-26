@@ -1,0 +1,84 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import 'package:in_app_purchase/in_app_purchase.dart';
+
+import 'package:suraasa/services/navigation/deep_links_handler.dart';
+
+InAppPurchase _inAppPurchase = InAppPurchase.instance;
+late StreamSubscription<dynamic> _streamSubscription;
+
+List<ProductDetails> _products = [];
+const _variant = {'com.suraasa.suraasa.course.tier5'};
+
+class TestingButtonPage extends StatefulWidget {
+  const TestingButtonPage({super.key});
+
+  @override
+  State<TestingButtonPage> createState() => _TestingButtonPageState();
+}
+
+class _TestingButtonPageState extends State<TestingButtonPage> with DeepLinksHandler<TestingButtonPage> {
+  @override
+  void initState() {
+    // TODO: implement initState
+    Stream purchaseUpdated = InAppPurchase.instance.purchaseStream;
+    _streamSubscription = purchaseUpdated.listen((purchaseList) {
+      _listenToPurchase(purchaseList, context);
+    }, onDone: () {
+      _streamSubscription.cancel();
+    }, onError: (error) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('error in listening')));
+    });
+    initStore();
+    super.initState();
+  }
+
+  initStore() async {
+    ProductDetailsResponse productDetailsResponse = await _inAppPurchase.queryProductDetails(_variant);
+    if (productDetailsResponse.error == null) {
+      setState(() {
+        _products = productDetailsResponse.productDetails;
+      });
+    }
+  }
+
+  // This widget is the root of your application.
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: const Text('In-App purchase')),
+        body: Center(
+          child: TextButton(
+            onPressed: () {
+              _buy();
+            },
+            child: const Text('pay'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+_listenToPurchase(List<PurchaseDetails> purchaseDetailsList, BuildContext context) {
+  // print("> Item Purchased: ${purchaseDetailsList.length}");
+  purchaseDetailsList.forEach((PurchaseDetails purchaseDetails) async {
+    // print("> Purchase Status: ${purchaseDetails.status}");
+
+    if (purchaseDetails.status == PurchaseStatus.pending) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pending')));
+    } else if (purchaseDetails.status == PurchaseStatus.error) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('error')));
+    } else if (purchaseDetails.status == PurchaseStatus.purchased) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('purchased')));
+    }
+  });
+}
+
+_buy() async {
+  final PurchaseParam param = PurchaseParam(productDetails: _products[0]);
+  _inAppPurchase.buyConsumable(purchaseParam: param);
+}
